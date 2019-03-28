@@ -41,7 +41,8 @@ Usually the credentials should be auto configured but can be overridden if neede
                         <property name="container-name-regexp">.*</property>
                         <property name="access-key">somekey</property>
                         <property name="secret-key">somekey</property>
-                        <property name="region">us-east-1</property>                       
+                        <property name="region">us-east-1</property>
+                        <property name="fail-fast">true</property>                       
                     </properties>
                 </discovery-strategy>
             </discovery-strategies>

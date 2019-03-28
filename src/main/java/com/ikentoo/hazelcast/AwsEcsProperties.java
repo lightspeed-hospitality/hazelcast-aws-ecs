@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.hazelcast.config.properties.PropertyTypeConverter.BOOLEAN;
 import static com.hazelcast.config.properties.PropertyTypeConverter.STRING;
 import static java.lang.String.format;
 
@@ -38,6 +39,7 @@ public enum AwsEcsProperties {
     container_name_regexp(true, STRING, null),
     access_key(true, STRING, null),
     secret_key(true, STRING, null),
+    fail_fast(true, BOOLEAN, null),
     region(true, STRING, null);
 
     public static final Collection<PropertyDefinition> PROPERTY_DEFINITIONS =
@@ -131,7 +133,7 @@ public enum AwsEcsProperties {
 
         public String getContainerNameFilter() {
             String containerFilter = (String) properties.get(container_name_regexp.key());
-            if (containerFilter==null || containerFilter.trim().isEmpty()) return ".*";
+            if (containerFilter == null || containerFilter.trim().isEmpty()) return ".*";
             return containerFilter.trim();
         }
 
@@ -144,11 +146,16 @@ public enum AwsEcsProperties {
         }
 
         private void hide(Map<String, Comparable> props, AwsEcsProperties prop) {
-            String secret = (String)props.get(prop.key());
+            String secret = (String) props.get(prop.key());
             if (secret == null || secret.isEmpty()) {
                 return;
             }
             props.put(prop.key(), secret.substring(0, Math.min(secret.length(), 2)) + "...");
+        }
+
+        public boolean isFailFast() {
+            Boolean failFast = (Boolean) properties.get(fail_fast.key());
+            return failFast == null || failFast;
         }
     }
 }
