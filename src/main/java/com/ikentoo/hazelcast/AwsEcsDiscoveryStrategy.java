@@ -32,6 +32,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.lang.String.format;
+
 
 @SuppressWarnings("raw")
 public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
@@ -45,10 +47,10 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
 
     @Override
     public Iterable<DiscoveryNode> discoverNodes() {
-        getLogger().info("called discoverNodes");
+        getLogger().info(format("Discovering nodes in AWS ECS %s", config));
 
         AmazonECSClientBuilder clientBuilder = AmazonECSClientBuilder.standard();
-        config.getAwsCredentials().ifPresent(clientBuilder::withCredentials);
+        config.getAwsCredentialsProvider().ifPresent(clientBuilder::withCredentials);
         config.getAwsRegion().ifPresent(clientBuilder::withRegion);
         AmazonECS client = clientBuilder.build();
 

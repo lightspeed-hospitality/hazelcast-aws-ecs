@@ -23,11 +23,11 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.hazelcast.config.properties.*;
 
 import java.util.*;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.hazelcast.config.properties.PropertyTypeConverter.STRING;
+import static java.lang.String.format;
 
 @SuppressWarnings("raw")
 public enum AwsEcsProperties {
@@ -61,18 +61,18 @@ public enum AwsEcsProperties {
     }
 
     public static class PortRange {
-        private final Supplier<IntStream> ports;
+        private final int lower;
+        private final int upper;
 
         PortRange(String portRange) {
             if (!portRange.matches("\\d+(-\\d+)?")) {
                 throw new ValidationException("portRange invalid: " + portRange);
             }
             String[] portRanges = portRange.split("-");
-            int lower = Integer.valueOf(portRanges[0]);
-            int upper = portRanges.length == 2 ? Integer.valueOf(portRanges[1]) : lower;
+            this.lower = Integer.valueOf(portRanges[0]);
+            this.upper = portRanges.length == 2 ? Integer.valueOf(portRanges[1]) : lower;
             validatePort(lower);
             validatePort(upper);
-            this.ports = () -> IntStream.rangeClosed(lower, upper);
         }
 
         private void validatePort(int port) {
@@ -82,7 +82,12 @@ public enum AwsEcsProperties {
         }
 
         IntStream ports() {
-            return ports.get();
+            return IntStream.rangeClosed(lower, upper);
+        }
+
+        @Override
+        public String toString() {
+            return format("%d-%d", lower, upper);
         }
     }
 
@@ -110,7 +115,7 @@ public enum AwsEcsProperties {
             return new PortRange(portSpec).ports();
         }
 
-        public Optional<AWSCredentialsProvider> getAwsCredentials() {
+        public Optional<AWSCredentialsProvider> getAwsCredentialsProvider() {
             AWSCredentialsProvider provider = null;
             String awsKey = (String) properties.get(access_key.key());
             String secretKey = (String) properties.get(secret_key.key());
@@ -128,6 +133,22 @@ public enum AwsEcsProperties {
             String containerFilter = (String) properties.get(container_name_regexp.key());
             if (containerFilter==null || containerFilter.trim().isEmpty()) return ".*";
             return containerFilter.trim();
+        }
+
+        @Override
+        public String toString() {
+            Map<String, Comparable> copy = new LinkedHashMap<>(properties);
+            hide(copy, access_key);
+            hide(copy, secret_key);
+            return copy.toString();
+        }
+
+        private void hide(Map<String, Comparable> props, AwsEcsProperties prop) {
+            String secret = (String)props.get(prop.key());
+            if (secret == null || secret.isEmpty()) {
+                return;
+            }
+            props.put(prop.key(), secret.substring(0, Math.min(secret.length(), 2)) + "...");
         }
     }
 }

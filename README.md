@@ -39,8 +39,8 @@ Usually the credentials should be auto configured but can be overridden if neede
                         <!-- below are optional --> 
                         <property name="ports">5701-5702</property>
                         <property name="container-name-regexp">.*</property>
-                        <property name="access_key">somekey</property>
-                        <property name="secret_key">somekey</property>
+                        <property name="access-key">somekey</property>
+                        <property name="secret-key">somekey</property>
                         <property name="region">us-east-1</property>                       
                     </properties>
                 </discovery-strategy>
