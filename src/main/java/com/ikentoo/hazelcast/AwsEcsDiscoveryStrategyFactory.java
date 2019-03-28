@@ -23,7 +23,8 @@ import com.hazelcast.spi.discovery.DiscoveryNode;
 import com.hazelcast.spi.discovery.DiscoveryStrategy;
 import com.hazelcast.spi.discovery.DiscoveryStrategyFactory;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
 
 public class AwsEcsDiscoveryStrategyFactory implements DiscoveryStrategyFactory {
 
