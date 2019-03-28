@@ -27,22 +27,21 @@ import com.hazelcast.spi.discovery.DiscoveryNode;
 import com.hazelcast.spi.discovery.SimpleDiscoveryNode;
 
 import java.net.UnknownHostException;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
+import static java.util.Comparator.comparing;
 
 
 @SuppressWarnings("raw")
 public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
 
     private final AwsEcsProperties.Config config;
-    private final Set<Address> previousValues = new ConcurrentSkipListSet<>();
+    private final Set<Address> previousValues = new ConcurrentSkipListSet<>(
+            comparing(Address::getHost).thenComparing(Address::getPort));
 
     public AwsEcsDiscoveryStrategy(ILogger logger, Map<String, Comparable> properties) {
         super(logger, properties);
