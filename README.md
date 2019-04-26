@@ -6,11 +6,16 @@ This discovery strategy uses the AWS ECS API to enumerate address of containers 
 Currently the task definition name cannot be filtered. You can however filter on the container name inside the task
 by setting a regexp in `container-name-regexp`.
 
-The ECS service role needs the permissions `ecs:ListTasks` and `ecs:DescribeTasks`.
+The ECS task role needs the permissions `ecs:ListTasks` and `ecs:DescribeTasks`.
 
-This service should work in both EC2 and fargate based clusters.
+This service should work in both EC2 and Fargate based clusters.
  
-You will need to expose the hazelcast port in your docker file (`EXPOSE 5701`) 
+You will need to expose the hazelcast port in your docker file (`EXPOSE 5701`) .
+
+The service security group members need bot be able to connect to the bind port (5701).
+
+In your hazelcast config it is important to specify the interface that is visible between clusterm members, 
+since ECS containers have internal interfaces which will otherwise be picked up as public address.
 
 Usually the credentials should be auto-configured but can be overridden if needed.
 
@@ -29,6 +34,10 @@ Usually the credentials should be auto-configured but can be overridden if neede
     </properties>
 
     <network>
+        <interfaces enabled="true">
+            <!-- this most likely corresponds to your vpc range -->
+            <interface>10.10.*.*</interface>
+        </interfaces>
         <join>
             <multicast enabled="false"/>
             <aws enabled="false" />
