@@ -26,11 +26,11 @@ import com.hazelcast.spi.discovery.AbstractDiscoveryStrategy;
 import com.hazelcast.spi.discovery.DiscoveryNode;
 import com.hazelcast.spi.discovery.SimpleDiscoveryNode;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URI;
 import java.net.UnknownHostException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
 
 
@@ -65,17 +66,19 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
         try {
 
             logger.fine(format("SYSTEM_ENV=%s", System.getenv()));
-            Path metaPath = Paths.get(System.getenv("ECS_CONTAINER_METADATA_FILE"));
-            logger.fine(format("meat path=%s", metaPath));
-
-            String content = Files.readAllLines(metaPath)
-                    .stream()
+            URI metaDataUri = getMetaDataUri();
+            if (metaDataUri==null) {
+                return null;
+            }
+            BufferedReader reader = new BufferedReader(new InputStreamReader(metaDataUri.toURL().openStream(), UTF_8));
+            String content = reader
+                    .lines()
+                    .onClose(close(reader))
                     .collect(Collectors.joining(" "));
 
             logger.fine(format("AWS_META=%s", content));
             Pattern pattern = Pattern.compile("^.*\"TaskARN\" *: *\"([^\"]+)\".*$", Pattern.DOTALL);
             Matcher matcher = pattern.matcher(content);
-
 
             if (!matcher.matches()) {
                 logger.warning("couldn't get taskARN from content: " + content);
@@ -85,10 +88,34 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             logger.fine(format("TaskARN=%s", arn));
             return matcher.group(1);
 
-        } catch (IOException e) {
-            logger.warning("couldn't get taskARN", e);
+        } catch (Exception e) {
+            logger.severe("couldn't get taskARN", e);
             return null;
         }
+    }
+
+    private static URI getMetaDataUri() {
+        String uri = System.getenv("ECS_CONTAINER_METADATA_URI");
+        if (uri != null && !uri.isEmpty()) {
+            return URI.create(uri + "/task");
+        }
+        uri = System.getenv("ECS_CONTAINER_METADATA_FILE");
+        if (uri != null && !uri.isEmpty()) {
+            if (!uri.startsWith("file:")) {
+                uri = "file://"+uri;
+            }
+            return URI.create(uri);
+        }
+        return null;
+    }
+
+    private static Runnable close(BufferedReader reader) {
+        return () -> {
+            try {
+                reader.close();
+            } catch (IOException e) {
+            }
+        };
     }
 
     @Override

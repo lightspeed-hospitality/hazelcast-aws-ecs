@@ -36,7 +36,25 @@ public class AwsEcsDiscoveryStrategyTest {
             = new EnvironmentVariables();
 
     @Test
-    public void getOwnTaskArn() throws IOException {
+    public void getOwnTaskArnFromFile() throws IOException {
+        Path tempFile = makeTaskFile();
+        environmentVariables.set("ECS_CONTAINER_METADATA_FILE", tempFile.toAbsolutePath().toString());
+        String arn = AwsEcsDiscoveryStrategy.getOwnTaskArn(new Slf4jFactory().getLogger(""));
+        assertEquals("arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4", arn);
+    }
+    @Test
+    public void getOwnTaskArnFromURI() throws IOException {
+        Path tempFile = makeTaskFile();
+        Path parent = tempFile.getParent();
+        Files.copy(tempFile, parent.resolve("task"));
+
+        environmentVariables.set("ECS_CONTAINER_METADATA_URI", parent.toAbsolutePath().toUri().toString());
+        String arn = AwsEcsDiscoveryStrategy.getOwnTaskArn(new Slf4jFactory().getLogger(""));
+        assertEquals("arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4", arn);
+    }
+
+
+    private Path makeTaskFile() throws IOException {
 
         String example = "{\n" +
                 "    \"Cluster\": \"default\",\n" +
@@ -47,10 +65,6 @@ public class AwsEcsDiscoveryStrategyTest {
 
         Path tempFile = Files.createTempFile("meta", "json");
         Files.write(tempFile, example.getBytes(StandardCharsets.UTF_8));
-        environmentVariables.set("ECS_CONTAINER_METADATA_FILE", tempFile.toAbsolutePath().toString());
-        String arn = AwsEcsDiscoveryStrategy.getOwnTaskArn(new Slf4jFactory().getLogger(""));
-        assertEquals("arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4", arn);
-
-
+        return tempFile;
     }
 }
