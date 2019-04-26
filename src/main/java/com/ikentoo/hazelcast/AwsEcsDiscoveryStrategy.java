@@ -29,6 +29,7 @@ import com.hazelcast.spi.discovery.SimpleDiscoveryNode;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
@@ -63,18 +64,25 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
     public static String getOwnTaskArn(ILogger logger) {
         try {
 
-            String content = Files.readAllLines(Paths.get(System.getenv("ECS_CONTAINER_METADATA_FILE")))
+            logger.fine(format("SYSTEM_ENV=%s", System.getenv()));
+            Path metaPath = Paths.get(System.getenv("ECS_CONTAINER_METADATA_FILE"));
+            logger.fine(format("meat path=%s", metaPath));
+
+            String content = Files.readAllLines(metaPath)
                     .stream()
                     .collect(Collectors.joining(" "));
 
+            logger.fine(format("AWS_META=%s", content));
             Pattern pattern = Pattern.compile("^.*\"TaskARN\" *: *\"([^\"]+)\".*$", Pattern.DOTALL);
-
             Matcher matcher = pattern.matcher(content);
+
 
             if (!matcher.matches()) {
                 logger.warning("couldn't get taskARN from content: " + content);
                 return null;
             }
+            String arn = matcher.group(1);
+            logger.fine(format("TaskARN=%s", arn));
             return matcher.group(1);
 
         } catch (IOException e) {
@@ -108,7 +116,10 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             List<Address> addresses = tasks.getTasks()
                     .stream()
                     // remove own task
-                    .filter(task -> !task.getTaskArn().equals(taskArn))
+                    .filter(task -> {
+                        getLogger().fine(format("local task [%s], discovered task [%s]", task.getTaskArn()));
+                        return !task.getTaskArn().equals(taskArn);
+                    })
                     .flatMap(this::fromTask)
                     .collect(Collectors.toList());
 
