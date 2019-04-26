@@ -25,9 +25,11 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static org.junit.Assert.assertEquals;
 
 public class AwsEcsDiscoveryStrategyTest {
@@ -46,7 +48,7 @@ public class AwsEcsDiscoveryStrategyTest {
     public void getOwnTaskArnFromURI() throws IOException {
         Path tempFile = makeTaskFile();
         Path parent = tempFile.getParent();
-        Files.copy(tempFile, parent.resolve("task"));
+        Files.copy(tempFile, parent.resolve("task"), REPLACE_EXISTING);
 
         environmentVariables.set("ECS_CONTAINER_METADATA_URI", parent.toAbsolutePath().toUri().toString());
         String arn = AwsEcsDiscoveryStrategy.getOwnTaskArn(new Slf4jFactory().getLogger(""));
