@@ -26,9 +26,17 @@ import com.hazelcast.spi.discovery.AbstractDiscoveryStrategy;
 import com.hazelcast.spi.discovery.DiscoveryNode;
 import com.hazelcast.spi.discovery.SimpleDiscoveryNode;
 
+import java.io.IOException;
 import java.net.UnknownHostException;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -43,14 +51,41 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
     private final Set<Address> previousValues = new ConcurrentSkipListSet<>(
             comparing(Address::getHost).thenComparing(Address::getPort));
 
+    private final String taskArn;
+
     public AwsEcsDiscoveryStrategy(ILogger logger, Map<String, Comparable> properties) {
         super(logger, properties);
+        this.taskArn = getOwnTaskArn(logger);
         this.config = AwsEcsProperties.fromProps(properties);
+
+    }
+
+    public static String getOwnTaskArn(ILogger logger) {
+        try {
+
+            String content = Files.readAllLines(Paths.get(System.getenv("ECS_CONTAINER_METADATA_FILE")))
+                    .stream()
+                    .collect(Collectors.joining(" "));
+
+            Pattern pattern = Pattern.compile("^.*\"TaskARN\" *: *\"([^\"]+)\".*$", Pattern.DOTALL);
+
+            Matcher matcher = pattern.matcher(content);
+
+            if (!matcher.matches()) {
+                logger.warning("couldn't get taskARN from content: " + content);
+                return null;
+            }
+            return matcher.group(1);
+
+        } catch (IOException e) {
+            logger.warning("couldn't get taskARN", e);
+            return null;
+        }
     }
 
     @Override
     public Iterable<DiscoveryNode> discoverNodes() {
-        getLogger().info(format("Discovering nodes in AWS ECS %s", config));
+        getLogger().fine(format("Discovering nodes in AWS ECS %s", config));
         try {
 
             AmazonECSClientBuilder clientBuilder = AmazonECSClientBuilder.standard();
@@ -69,8 +104,11 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             describeTaskRequest.setCluster(config.getClusterName());
             DescribeTasksResult tasks = client.describeTasks(describeTaskRequest);
 
+
             List<Address> addresses = tasks.getTasks()
                     .stream()
+                    // remove own task
+                    .filter(task -> !task.getTaskArn().equals(taskArn))
                     .flatMap(this::fromTask)
                     .collect(Collectors.toList());
 
