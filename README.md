@@ -6,20 +6,61 @@ This discovery strategy uses the AWS ECS API to enumerate address of containers 
 Currently the task definition name cannot be filtered. You can however filter on the container name inside the task
 by setting a regexp in `container-name-regexp`.
 
-The ECS task role needs the permissions `ecs:ListTasks` and `ecs:DescribeTasks`.
+You should create an ECS task role and attach the permissions `ecs:ListTasks` and `ecs:DescribeTasks` to it through a
+policy. Example:
+
+```bash
+$ aws iam list-attached-role-policies  --role-name some-ecs-task-role
+{
+    "AttachedPolicies": [
+        {
+            "PolicyName": "EcsTaskRole-allow-ecs-read-and-list",
+            "PolicyArn": "arn:aws:iam::...:policy/EcsTaskRole-allow-ecs-read-and-list"
+        }
+        ...
+    ]
+}
+$ aws iam get-policy-version --policy-arn arn:aws:iam::...:policy/EcsTaskRole-allow-ecs-read-and-list --version-id v2
+{
+    "PolicyVersion": {
+        "CreateDate": "2019-04-24T07:13:35Z",
+        "VersionId": "v2",
+        "Document": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": [
+                        "ecs:ListTasks",
+                        "ecs:DescribeTasks"
+                    ],
+                    "Resource": "*",
+                    "Effect": "Allow",
+                    "Sid": "VisualEditor0"
+                }
+            ]
+        },
+        "IsDefaultVersion": true
+    }
+}
+```
 
 This service should work in both EC2 and Fargate based clusters.
  
 You will need to expose the hazelcast port in your docker file (`EXPOSE 5701`) .
 
-The service security group members need bot be able to connect to the bind port (5701).
+The task definition must contain a port mapping to port 5701.
 
-In your hazelcast config it is important to specify the interface that is visible between clusterm members, 
-since ECS containers have internal interfaces which will otherwise be picked up as public address.
+The ECS-service network security group must contain itself as a source in a TCP inbound rule to the port 5701, such
+that cluster members can connect to each other on port 5701.
 
-Usually the credentials should be auto-configured but can be overridden if needed.
+In your hazelcast config it is important to specify the interface that is visible between cluster members,
+since ECS containers have internal interfaces which will otherwise potentially be picked up as public address.
+
+Usually the AWS credentials are not necessary if you create a task role with the right permission, but can
+be overriden if required.
 
 
+## Xml configuration
 ```xml
 
 <?xml version="1.0" encoding="UTF-8"?>
