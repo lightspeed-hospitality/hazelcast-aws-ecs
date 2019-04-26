@@ -36,7 +36,7 @@ Usually the credentials should be auto configured but can be overridden if neede
                     <properties>
                         <property name="cluster">ikentoo-services-trial</property>
                         <property name="service">ik-waitlist-trial</property>
-                        <!-- below are optional --> 
+                        <!-- below are optional, prefer using a ecs task role with right policy/permission--> 
                         <property name="ports">5701-5702</property>
                         <property name="container-name-regexp">.*</property>
                         <property name="access-key">somekey</property>
