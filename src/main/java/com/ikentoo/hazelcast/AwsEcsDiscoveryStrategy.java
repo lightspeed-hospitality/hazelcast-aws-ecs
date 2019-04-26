@@ -144,7 +144,7 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
                     .stream()
                     // remove own task
                     .filter(task -> {
-                        getLogger().fine(format("local task [%s], discovered task [%s]", task.getTaskArn()));
+                        getLogger().fine(format("local task [%s], discovered task [%s]", this.taskArn, task.getTaskArn()));
                         return !task.getTaskArn().equals(taskArn);
                     })
                     .flatMap(this::fromTask)
