@@ -33,8 +33,10 @@ import static java.lang.String.format;
 @SuppressWarnings("raw")
 public enum AwsEcsProperties {
 
-    cluster(false, STRING, null),
-    service(false, STRING, null),
+    cluster(true, STRING, null),
+    cluster_name_regexp( true, STRING, null),
+    service(true, STRING, null),
+    service_name_regexp( true, STRING, null),
     ports(true, STRING, value -> new PortRange((String) value)),
     container_name_regexp(true, STRING, null),
     access_key(true, STRING, null),
@@ -108,6 +110,37 @@ public enum AwsEcsProperties {
         String getServiceName() {
             return (String) properties.get(service.key());
         }
+
+        String getClusterNameRegexp() {
+
+            /**
+             * if cluster was passed set it as regexp for full match
+             */
+            if (properties.containsKey(cluster.key()) && getClusterName() != null && getClusterName().trim().length() > 0)
+                return getClusterName();
+
+            /**
+             * Otherwise return regexp if set, otherwise wildcard
+             */
+            return (String) properties.getOrDefault(cluster_name_regexp.key(), ".*");
+        }
+
+        String getServiceNameRegexp() {
+
+            /**
+             * if service was passed set it as regexp for full match
+             */
+            if (properties.containsKey(service.key()) && getServiceName() != null && getServiceName().trim().length() > 0)
+                return getServiceName();
+
+            /**
+             * Otherwise return regexp if set, otherwise wildcard
+             */
+            return (String) properties.getOrDefault(service_name_regexp.key(), ".*");
+
+        }
+
+
 
         IntStream getPorts() {
             String portSpec = (String) properties.get(ports.key());

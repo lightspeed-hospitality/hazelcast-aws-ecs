@@ -3,6 +3,9 @@ Discovery strategy for AWS ECS.
 
 This discovery strategy uses the AWS ECS API to enumerate address of containers in tasks for a given service and cluster.
 
+Cluster and Services names can be filtered using `cluster-name-regexp` as well as `service-name-regexp` as you might 
+want to deploy to different environments (dev, stage, prod).
+
 Currently the task definition name cannot be filtered. You can however filter on the container name inside the task
 by setting a regexp in `container-name-regexp`.
 
@@ -31,7 +34,9 @@ $ aws iam get-policy-version --policy-arn arn:aws:iam::...:policy/EcsTaskRole-al
                 {
                     "Action": [
                         "ecs:ListTasks",
-                        "ecs:DescribeTasks"
+                        "ecs:DescribeTasks",
+                        "ecs:ListClusters",
+                        "ecs:ListServices"
                     ],
                     "Resource": "*",
                     "Effect": "Allow",
@@ -89,6 +94,8 @@ be overriden if required.
                         <property name="cluster">ikentoo-services-trial</property>
                         <property name="service">ik-waitlist-trial</property>
                         <!-- below are optional, prefer using a ecs task role with right policy/permission--> 
+                        <property name="cluster-name-regexp">.*ikentoo-dev-cluster.*</property>
+                        <property name="service-name-regexp">.*ikentoo-dev-service.*</property>
                         <property name="ports">5701-5702</property>
                         <property name="container-name-regexp">.*</property>
                         <property name="access-key">somekey</property>
@@ -104,3 +111,73 @@ be overriden if required.
 
 
 ```
+## Property configuration
+```java
+
+
+     
+    /**
+    * Setup Properties
+    */
+    Map<String, Comparable> properties = new HashMap<>();
+    properties.put("cluster", "ikentoo-services-trial");
+    properties.put("service", "ik-waitlist-trial");
+
+    /**
+    * Alternatively or in Combination with regexp for cluster / service name,
+    * cluster / service properties if available will overwrite the regexps
+    */
+    properties.put("cluster-name-regexp", ".*-dev-.*");
+    properties.put("service-name-regexp", ".*-backend-.*-dev$");
+    
+    properties.put("ports", "5701-5702");
+    properties.put("container-name-regexp", ".*");
+    properties.put("fail-fast", "true");
+    
+    properties.put("region", "us-east-1");
+    properties.put("access-key", "<somekey>");
+    properties.put("secret-key", "<somekey>");
+
+    /**
+    * Hazelcast Configuration
+    */ 
+    DiscoveryStrategyConfig discoveryStrategyConfig = new DiscoveryStrategyConfig(awsEcsDiscoveryStrategyFactory, properties);
+    joinConfig.getDiscoveryConfig().addDiscoveryStrategyConfig(discoveryStrategyConfig);
+
+``` 
+
+## Integration / Behavior Testing
+
+Please use provided integration test `AwsEcsDiscoveryStrategyIT` to test behavior of `discoveryNodes()` and resulting 
+clusters and services names based on set parameters. You need to provide valid `AWS_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY` and `AWS_DEFAULT_REGION`
+as environment variables as well as `CLUSTER_NAME`, `CLUSTER_NAME_REGEXP`, `SERVICE_NAME` and `SERVICE_NAME_REGEXP` for filtering.
+
+To execute the test simply use the following command line. 
+```bash 
+export AWS_SECRET_ACCESS_KEY=rmxxxxx
+export AWS_ACCESS_KEY=AKIxxxx
+export AWS_DEFAULT_REGION=us-east-1
+
+export CLUSTER_NAME=testing-xxxxx-cluster-ecs-stack-us-east-1-dev-EcsCluster-32XXXXXXXX
+export CLUSTER_NAME_REGEXP=.*-dev-.*
+export SERVICE_NAME=service/xxxxx-testing-backend-delivery-system-dev
+export SERVICE_NAME_REGEXP=.*-backend-.*-dev$
+
+mvn clean test -Dtest=AwsEcsDiscoveryStrategyIT
+
+
+[main] DEBUG simple - SYSTEM_ENV={PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/X11/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Wireshark.app/Contents/MacOS, ... }
+[main] DEBUG simple - AWS_META={     "Cluster": "default",     "ContainerInstanceARN": ... }
+[main] DEBUG simple - TaskARN=arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4
+[main] DEBUG simple - Discovering nodes in AWS ECS {cluster=testing-xxxx-cluster-ecs-stack-us-east-1-dev-EcsCluster-32XXXXXXXX, secret-key=rm..., service-name-regexp=.*-backend-.*-dev$, access-key=AK..., region=us-east-1}
+[main] DEBUG simple - Using Cluster Name Regexp 'testing-xxxxx-cluster-ecs-stack-us-east-1-dev-EcsCluster-32XXXXXXXX'
+[main] DEBUG simple - Using Service Name Regexp '.*-backend-.*-dev$'
+[main] DEBUG simple - Found Cluster 'arn:aws:ecs:us-east-1:686xxxxxxxxx:cluster/testing-xxxx-cluster-ecs-stack-us-east-1-dev-EcsCluster-32XXXXXXXX'
+[main] DEBUG simple - Found Service 'arn:aws:ecs:us-east-1:686xxxxxxxxx:service/xxxx-testing-backend-kv-dev'
+[main] DEBUG simple - Found Service 'arn:aws:ecs:us-east-1:686xxxxxxxxx:service/xxxx-testing-backend-api-settings-cache-dev'
+[main] DEBUG simple - Found Service 'arn:aws:ecs:us-east-1:686xxxxxxxxx:service/xxxx-testing-backend-delivery-system-dev'
+[main] DEBUG simple - 3 Tasks Found : [arn:aws:ecs:us-east-1:686xxxxxxxxx:task/0376050b-d3f6-4f5d-9cc5-c3d9e0c13ef9, arn:aws:ecs:us-east-1:686xxxxxxxxx:task/f7d7982e-4734-4929-bc54-e0dc6f3f4eb5, ...]
+[main] DEBUG simple - 2 Addresses Found : [[10.192.21.126]:5701, [10.192.20.28]:5701]
+[main] INFO simple - Private / Public Address Found : [10.192.20.28]:5701 / [10.192.20.28]:5701
+[main] INFO simple - Private / Public Address Found : [10.192.21.126]:5701 / [10.192.21.126]:5701
+``

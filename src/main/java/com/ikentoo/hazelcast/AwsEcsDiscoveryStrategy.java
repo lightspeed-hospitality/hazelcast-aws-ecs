@@ -31,10 +31,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -121,6 +118,16 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
     @Override
     public Iterable<DiscoveryNode> discoverNodes() {
         getLogger().fine(format("Discovering nodes in AWS ECS %s", config));
+
+        /**
+         * compile pattern for Cluster / Service filtering
+         */
+        Pattern clusterNamePattern = Pattern.compile(config.getClusterNameRegexp());
+        Pattern serviceNamePattern = Pattern.compile(config.getServiceNameRegexp());
+
+        getLogger().fine("Using Cluster Name Regexp '" + config.getClusterNameRegexp() + "'");
+        getLogger().fine("Using Service Name Regexp '" + config.getServiceNameRegexp() + "'");
+
         try {
 
             AmazonECSClientBuilder clientBuilder = AmazonECSClientBuilder.standard();
@@ -128,30 +135,74 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             config.getAwsRegion().ifPresent(clientBuilder::withRegion);
             AmazonECS client = clientBuilder.build();
 
-            ListTasksRequest listTaskRequest = new ListTasksRequest();
-            listTaskRequest.setCluster(config.getClusterName());
-            listTaskRequest.setServiceName(config.getServiceName());
-            listTaskRequest.setDesiredStatus(DesiredStatus.RUNNING);
-            ListTasksResult taskIds = client.listTasks(listTaskRequest);
-
-            DescribeTasksRequest describeTaskRequest = new DescribeTasksRequest();
-            describeTaskRequest.setTasks(taskIds.getTaskArns());
-            describeTaskRequest.setCluster(config.getClusterName());
-            DescribeTasksResult tasks = client.describeTasks(describeTaskRequest);
-
-
-            List<Address> addresses = tasks.getTasks()
-                    .stream()
-                    // remove own task
-                    .filter(task -> {
-                        getLogger().fine(format("local task [%s], discovered task [%s]", this.taskArn, task.getTaskArn()));
-                        return !task.getTaskArn().equals(taskArn);
-                    })
-                    .flatMap(this::fromTask)
-                    .collect(Collectors.toList());
 
             previousValues.clear();
-            previousValues.addAll(addresses);
+
+            /**
+             * if a cluster name regexp available filter the available clusters based on it,
+             * otherwise use default "*" wildcard
+             */
+            client.listClusters().getClusterArns().stream().filter(clusterArn -> clusterNamePattern.matcher(clusterArn).find()).forEach((clusterArn) -> {
+
+                /**
+                 * List of matching tasks
+                 */
+                Vector<String> matching_tasks = new Vector<String>();
+
+                getLogger().fine("Found Cluster '" + clusterArn + "'");
+
+               ListServicesRequest listServicesRequest = new ListServicesRequest();
+               listServicesRequest.setCluster(clusterArn);
+               listServicesRequest.setLaunchType(LaunchType.EC2.toString());
+
+                /**
+                 * Walk through all matching service names
+                 */
+                client.listServices(listServicesRequest).getServiceArns().stream().filter(serviceArn -> serviceNamePattern.matcher(serviceArn).find()).forEach((serviceArn) -> {
+
+                    getLogger().fine("Found Service '" + serviceArn + "'");
+
+                   ListTasksRequest listTasksRequest = new ListTasksRequest();
+                   listTasksRequest.setCluster(clusterArn);
+                   listTasksRequest.setServiceName(serviceArn);
+                   listTasksRequest.setDesiredStatus(DesiredStatus.RUNNING);
+
+                   ListTasksResult taskIds = client.listTasks(listTasksRequest);
+
+                    /**
+                     * Add task to matching task if it does not match with own taskArn.
+                     */
+                    if (this.taskArn != null)
+                        taskIds.getTaskArns().stream().filter(currentTaskArn -> !this.taskArn.equals(currentTaskArn)).forEach((currentTaskArn) -> {matching_tasks.add(currentTaskArn);});
+                    /**
+                     * this is mainly for testing purpose as Own TaskArn should be available in ECS Context
+                     */
+                    else
+                        taskIds.getTaskArns().forEach((currentTaskArn) -> {matching_tasks.add(currentTaskArn);});
+               });
+
+
+                /**
+                 * if there are tasks found set them as the list of currently available
+                 * tasks
+                 */
+                if(!matching_tasks.isEmpty()) {
+
+                    DescribeTasksRequest describeTaskRequest = new DescribeTasksRequest();
+                    describeTaskRequest.setTasks(matching_tasks);
+                    describeTaskRequest.setCluster(clusterArn);
+
+                    DescribeTasksResult tasks = client.describeTasks(describeTaskRequest);
+
+                    List<Address> addresses = tasks.getTasks().stream().flatMap(this::fromTask).collect(Collectors.toList());
+
+                    getLogger().fine(matching_tasks.size() + " Tasks Found : " + matching_tasks);
+                    getLogger().fine(addresses.size() + " Addresses Found : " + addresses);
+
+                    previousValues.addAll(addresses);
+                }
+            });
+
         } catch (Exception e) {
             if (config.isFailFast()) {
                 throw e;
