@@ -23,6 +23,7 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.hazelcast.config.properties.*;
 
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -33,8 +34,11 @@ import static java.lang.String.format;
 @SuppressWarnings("raw")
 public enum AwsEcsProperties {
 
-    cluster(false, STRING, null),
-    service(false, STRING, null),
+    cluster(true, STRING, null),
+    cluster_name_regexp(true, STRING, null),
+    service(true, STRING, null),
+    service_name_regexp(true, STRING, null),
+
     ports(true, STRING, value -> new PortRange((String) value)),
     container_name_regexp(true, STRING, null),
     access_key(true, STRING, null),
@@ -96,9 +100,13 @@ public enum AwsEcsProperties {
 
     public static class Config {
         private final Map<String, Comparable> properties;
+        private final Pattern clusterNamePattern;
+        private final Pattern serviceNamePattern;
 
         Config(Map<String, Comparable> properties) {
             this.properties = properties;
+            this.clusterNamePattern = initPattern(cluster_name_regexp);
+            this.serviceNamePattern = initPattern(service_name_regexp);
         }
 
         String getClusterName() {
@@ -107,6 +115,18 @@ public enum AwsEcsProperties {
 
         String getServiceName() {
             return (String) properties.get(service.key());
+        }
+
+        Pattern getClusterNameRegexp() {
+            return clusterNamePattern;
+        }
+
+        Pattern getServiceNameRegexp() {
+            return serviceNamePattern;
+        }
+
+        private Pattern initPattern(AwsEcsProperties prop) {
+            return Pattern.compile((String) properties.getOrDefault(prop.key(), ".*"));
         }
 
         IntStream getPorts() {
