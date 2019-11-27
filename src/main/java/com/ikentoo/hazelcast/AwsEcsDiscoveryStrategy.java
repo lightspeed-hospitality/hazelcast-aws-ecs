@@ -25,6 +25,7 @@ import com.hazelcast.nio.Address;
 import com.hazelcast.spi.discovery.AbstractDiscoveryStrategy;
 import com.hazelcast.spi.discovery.DiscoveryNode;
 import com.hazelcast.spi.discovery.SimpleDiscoveryNode;
+import com.hazelcast.util.StringUtil;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -39,6 +40,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
@@ -67,7 +69,7 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
 
             logger.fine(format("SYSTEM_ENV=%s", System.getenv()));
             URI metaDataUri = getMetaDataUri();
-            if (metaDataUri==null) {
+            if (metaDataUri == null) {
                 return null;
             }
             BufferedReader reader = new BufferedReader(new InputStreamReader(metaDataUri.toURL().openStream(), UTF_8));
@@ -102,7 +104,7 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
         uri = System.getenv("ECS_CONTAINER_METADATA_FILE");
         if (uri != null && !uri.isEmpty()) {
             if (!uri.startsWith("file:")) {
-                uri = "file://"+uri;
+                uri = "file://" + uri;
             }
             return URI.create(uri);
         }
@@ -128,19 +130,16 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             config.getAwsRegion().ifPresent(clientBuilder::withRegion);
             AmazonECS client = clientBuilder.build();
 
-            ListTasksRequest listTaskRequest = new ListTasksRequest();
-            listTaskRequest.setCluster(config.getClusterName());
-            listTaskRequest.setServiceName(config.getServiceName());
-            listTaskRequest.setDesiredStatus(DesiredStatus.RUNNING);
-            ListTasksResult taskIds = client.listTasks(listTaskRequest);
 
-            DescribeTasksRequest describeTaskRequest = new DescribeTasksRequest();
-            describeTaskRequest.setTasks(taskIds.getTaskArns());
-            describeTaskRequest.setCluster(config.getClusterName());
-            DescribeTasksResult tasks = client.describeTasks(describeTaskRequest);
+            List<Task> tasks;
+            if (StringUtil.isNullOrEmptyAfterTrim(config.getClusterName()) &&
+                    StringUtil.isNullOrEmptyAfterTrim(config.getServiceName())) {
+                tasks = tasksForClusterAndService(client, config.getClusterName(), config.getServiceName());
+            } else {
+                tasks = tasksForClusterAndServicePattern(client, config.getClusterNameRegexp(), config.getServiceNameRegexp());
+            }
 
-
-            List<Address> addresses = tasks.getTasks()
+            List<Address> addresses = tasks
                     .stream()
                     // remove own task
                     .filter(task -> {
@@ -152,6 +151,7 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
 
             previousValues.clear();
             previousValues.addAll(addresses);
+
         } catch (Exception e) {
             if (config.isFailFast()) {
                 throw e;
@@ -163,12 +163,12 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
                 .collect(Collectors.toList());
     }
 
+
     private Stream<Address> fromTask(Task task) {
         return task.getContainers()
                 .stream()
                 .filter(container -> container.getName().matches(config.getContainerNameFilter()))
                 .flatMap(this::fromContainer);
-
     }
 
     private Stream<Address> fromContainer(Container container) {
@@ -189,4 +189,68 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
                 })
                 .filter(Objects::nonNull);
     }
+
+    private static <T> List<List<T>> toChunks(int size, List<T> list) {
+        return IntStream.rangeClosed(0, list.size())
+                .boxed()
+                .map(idx -> new Pair<>(idx, list.get(idx)))
+                .collect(Collectors.groupingBy(p -> p.l / size))
+                .values()
+                .stream()
+                .map(chunked_pairs -> chunked_pairs.stream().map(p -> p.r).collect(Collectors.toList()))
+                .collect(Collectors.toList());
+    }
+
+    private static List<Task> tasksForClusterAndTaskArns(AmazonECS client, String clusterName, List<String> taskArns) {
+        return toChunks(100, taskArns)
+                .stream()
+                .filter(l -> !l.isEmpty())
+                .flatMap(chunkedarns -> {
+                    DescribeTasksRequest describeTaskRequest = new DescribeTasksRequest();
+                    describeTaskRequest.setTasks(chunkedarns);
+                    describeTaskRequest.setCluster(clusterName);
+                    DescribeTasksResult tasks = client.describeTasks(describeTaskRequest);
+                    return tasks.getTasks().stream();
+                })
+                .collect(Collectors.toList());
+    }
+
+    private static List<Task> tasksForClusterAndService(AmazonECS client, String clusterName, String serviceName) {
+        ListTasksRequest listTaskRequest = new ListTasksRequest();
+        listTaskRequest.setCluster(clusterName);
+        listTaskRequest.setServiceName(serviceName);
+        listTaskRequest.setDesiredStatus(DesiredStatus.RUNNING);
+        ListTasksResult taskIds = client.listTasks(listTaskRequest);
+        return tasksForClusterAndTaskArns(client, clusterName, taskIds.getTaskArns());
+    }
+
+    private static List<Task> tasksForClusterAndServicePattern(AmazonECS client, Pattern clusterNamePattern, Pattern serviceNamePattern) {
+        return client
+                .listClusters()
+                .getClusterArns()
+                .stream()
+                .filter(clusterArn -> clusterNamePattern.matcher(clusterArn).matches())
+                .flatMap(clusterArn -> {
+                            ListServicesRequest listServicesRequest = new ListServicesRequest();
+                            listServicesRequest.setCluster(clusterArn);
+                            return client.listServices(listServicesRequest).getServiceArns()
+                                    .stream()
+                                    .filter(serviceArn -> serviceNamePattern.matcher(serviceArn).matches())
+                                    .map(serviceArn -> new Pair<>(clusterArn, serviceArn));
+                        }
+                )
+                .flatMap(serviceIds -> tasksForClusterAndService(client, serviceIds.l, serviceIds.r).stream())
+                .collect(Collectors.toList());
+    }
+
+    static class Pair<L, R> {
+        final L l;
+        final R r;
+
+        Pair(L l, R r) {
+            this.l = l;
+            this.r = r;
+        }
+    }
+
 }
