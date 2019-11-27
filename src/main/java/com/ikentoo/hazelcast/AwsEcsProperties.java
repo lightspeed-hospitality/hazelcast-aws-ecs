@@ -21,6 +21,7 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.hazelcast.config.properties.*;
+import com.hazelcast.util.StringUtil;
 
 import java.util.*;
 import java.util.regex.Pattern;
@@ -30,6 +31,7 @@ import java.util.stream.IntStream;
 import static com.hazelcast.config.properties.PropertyTypeConverter.BOOLEAN;
 import static com.hazelcast.config.properties.PropertyTypeConverter.STRING;
 import static java.lang.String.format;
+import static java.util.Optional.ofNullable;
 
 @SuppressWarnings("raw")
 public enum AwsEcsProperties {
@@ -105,8 +107,8 @@ public enum AwsEcsProperties {
 
         Config(Map<String, Comparable> properties) {
             this.properties = properties;
-            this.clusterNamePattern = initPattern(cluster_name_regexp);
-            this.serviceNamePattern = initPattern(service_name_regexp);
+            this.clusterNamePattern = initPattern(cluster_name_regexp, getClusterName());
+            this.serviceNamePattern = initPattern(service_name_regexp, getServiceName());
         }
 
         String getClusterName() {
@@ -125,8 +127,12 @@ public enum AwsEcsProperties {
             return serviceNamePattern;
         }
 
-        private Pattern initPattern(AwsEcsProperties prop) {
-            return Pattern.compile((String) properties.getOrDefault(prop.key(), ".*"));
+        private Pattern initPattern(AwsEcsProperties prop, String exactFallBack) {
+            String fallback = "^" + ofNullable(exactFallBack)
+                    .map(Pattern::quote)
+                    .orElse(".*") + "$";
+
+            return Pattern.compile((String) properties.getOrDefault(prop.key(), fallback));
         }
 
         IntStream getPorts() {
@@ -144,11 +150,11 @@ public enum AwsEcsProperties {
             if (awsKey != null && secretKey != null) {
                 provider = new AWSStaticCredentialsProvider(new BasicAWSCredentials(awsKey, secretKey));
             }
-            return Optional.ofNullable(provider);
+            return ofNullable(provider);
         }
 
         public Optional<String> getAwsRegion() {
-            return Optional.ofNullable((String) properties.get(region.key()));
+            return ofNullable((String) properties.get(region.key()));
         }
 
         public String getContainerNameFilter() {
