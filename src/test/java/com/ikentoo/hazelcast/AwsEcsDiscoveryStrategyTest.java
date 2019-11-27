@@ -25,7 +25,6 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -44,6 +43,7 @@ public class AwsEcsDiscoveryStrategyTest {
         String arn = AwsEcsDiscoveryStrategy.getOwnTaskArn(new Slf4jFactory().getLogger(""));
         assertEquals("arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4", arn);
     }
+
     @Test
     public void getOwnTaskArnFromURI() throws IOException {
         Path tempFile = makeTaskFile();

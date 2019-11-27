@@ -21,20 +21,26 @@ import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.hazelcast.config.properties.*;
+import com.hazelcast.util.StringUtil;
 
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.hazelcast.config.properties.PropertyTypeConverter.BOOLEAN;
 import static com.hazelcast.config.properties.PropertyTypeConverter.STRING;
 import static java.lang.String.format;
+import static java.util.Optional.ofNullable;
 
 @SuppressWarnings("raw")
 public enum AwsEcsProperties {
 
-    cluster(false, STRING, null),
-    service(false, STRING, null),
+    cluster(true, STRING, null),
+    cluster_name_regexp(true, STRING, null),
+    service(true, STRING, null),
+    service_name_regexp(true, STRING, null),
+
     ports(true, STRING, value -> new PortRange((String) value)),
     container_name_regexp(true, STRING, null),
     access_key(true, STRING, null),
@@ -96,9 +102,13 @@ public enum AwsEcsProperties {
 
     public static class Config {
         private final Map<String, Comparable> properties;
+        private final Pattern clusterNamePattern;
+        private final Pattern serviceNamePattern;
 
         Config(Map<String, Comparable> properties) {
             this.properties = properties;
+            this.clusterNamePattern = initPattern(cluster_name_regexp, getClusterName());
+            this.serviceNamePattern = initPattern(service_name_regexp, getServiceName());
         }
 
         String getClusterName() {
@@ -107,6 +117,22 @@ public enum AwsEcsProperties {
 
         String getServiceName() {
             return (String) properties.get(service.key());
+        }
+
+        Pattern getClusterNameRegexp() {
+            return clusterNamePattern;
+        }
+
+        Pattern getServiceNameRegexp() {
+            return serviceNamePattern;
+        }
+
+        private Pattern initPattern(AwsEcsProperties prop, String exactFallBack) {
+            String fallback = "^" + ofNullable(exactFallBack)
+                    .map(Pattern::quote)
+                    .orElse(".*") + "$";
+
+            return Pattern.compile((String) properties.getOrDefault(prop.key(), fallback));
         }
 
         IntStream getPorts() {
@@ -124,11 +150,11 @@ public enum AwsEcsProperties {
             if (awsKey != null && secretKey != null) {
                 provider = new AWSStaticCredentialsProvider(new BasicAWSCredentials(awsKey, secretKey));
             }
-            return Optional.ofNullable(provider);
+            return ofNullable(provider);
         }
 
         public Optional<String> getAwsRegion() {
-            return Optional.ofNullable((String) properties.get(region.key()));
+            return ofNullable((String) properties.get(region.key()));
         }
 
         public String getContainerNameFilter() {
