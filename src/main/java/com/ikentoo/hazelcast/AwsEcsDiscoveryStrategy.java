@@ -132,8 +132,8 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
 
 
             List<Task> tasks;
-            if (StringUtil.isNullOrEmptyAfterTrim(config.getClusterName()) &&
-                    StringUtil.isNullOrEmptyAfterTrim(config.getServiceName())) {
+            if (!StringUtil.isNullOrEmptyAfterTrim(config.getClusterName()) &&
+                    !StringUtil.isNullOrEmptyAfterTrim(config.getServiceName())) {
                 tasks = tasksForClusterAndService(client, config.getClusterName(), config.getServiceName());
             } else {
                 tasks = tasksForClusterAndServicePattern(client, config.getClusterNameRegexp(), config.getServiceNameRegexp());
