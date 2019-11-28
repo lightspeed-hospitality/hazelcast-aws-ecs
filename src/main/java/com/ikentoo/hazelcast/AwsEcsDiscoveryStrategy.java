@@ -190,8 +190,8 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
                 .filter(Objects::nonNull);
     }
 
-    private static <T> List<List<T>> toChunks(int size, List<T> list) {
-        return IntStream.rangeClosed(0, list.size())
+    static <T> List<List<T>> toChunks(int size, List<T> list) {
+        return IntStream.range(0, list.size())
                 .boxed()
                 .map(idx -> new Pair<>(idx, list.get(idx)))
                 .collect(Collectors.groupingBy(p -> p.l / size))
