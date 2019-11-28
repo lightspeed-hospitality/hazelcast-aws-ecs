@@ -27,8 +27,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 public class AwsEcsDiscoveryStrategyTest {
@@ -68,5 +70,17 @@ public class AwsEcsDiscoveryStrategyTest {
         Path tempFile = Files.createTempFile("meta", "json");
         Files.write(tempFile, example.getBytes(StandardCharsets.UTF_8));
         return tempFile;
+    }
+
+    @Test
+    public void toChunks() {
+        List<List<String>> chunks = AwsEcsDiscoveryStrategy.toChunks(2, asList("1", "2"));
+        assertEquals(1, chunks.size());
+
+        chunks = AwsEcsDiscoveryStrategy.toChunks(1, asList("1", "2"));
+        assertEquals(2, chunks.size());
+
+        chunks = AwsEcsDiscoveryStrategy.toChunks(3, asList("1", "2"));
+        assertEquals(1, chunks.size());
     }
 }
