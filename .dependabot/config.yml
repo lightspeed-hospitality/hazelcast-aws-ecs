@@ -3,6 +3,7 @@ version: 1
 update_configs:
   - package_manager: "java:maven"
     directory: "/"
+    # Security updates are always created as soon as possible (i.e., "live").
     update_schedule: "daily"
     allowed_updates:
       - match:
