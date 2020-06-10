@@ -24,7 +24,7 @@ jobs:
           docker-deploy-goals: ""
 
 orbs:
-  mvn-build-publish: development/mvnlsk@dev:1.0.63
+  mvn-build-publish: development/mvnlsk@1.0.63
 
 workflows:
   version: 2
