@@ -1,38 +1,37 @@
 version: 2.1
-references:
-  setup_remote_docker: &setup_remote_docker
-    setup_remote_docker:
-      docker_layer_caching: true
-
-executors:
-  build:
-    docker:
-      - image: ikentoo/docker-java-build:8
-        auth:
-          username: $DOCKERHUB_IKENTOO_USER
-          password: $DOCKERHUB_IKENTOO_PASSWORD
-jobs:
-  build:
-    executor: build
-    steps:
-      - mvn-build-publish/build:
-          workspace: .
-      - mvn-build-publish/test:
-          workspace: .
-      - mvn-build-publish/push:
-          workspace: .
-          docker-deploy-goals: ""
 
 orbs:
-  mvn-build-publish: development/mvnlsk@1.0.69
+  mvnlsk: development/mvnlsk@1.0.317
+
+jobs:
+  build-test:
+    executor: mvnlsk/java-8
+    steps:
+      - mvnlsk/build
+      - mvnlsk/test
+  push:
+    executor: mvnlsk/java-8
+    steps:
+      - mvnlsk/push:
+          docker-deploy-goals: ""
+
 
 workflows:
   version: 2
   workflow:
     jobs:
-      - build:
+      - build-test:
+          context: global
           filters:
             tags:
               only: /^[0-9]+[.][0-9]+[.][0-9]+$/
-          context: Ikentoo
-
+      - push:
+          context: global
+          requires:
+            - build-test
+          filters:
+            branches:
+              only:
+                - main
+            tags:
+              only: /^[0-9]+[.][0-9]+[.][0-9]+$/
