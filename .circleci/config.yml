@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  mvnlsk: development/mvnlsk@1.0.317
+  mvnlsk: development/mvnlsk@1.1
 
 jobs:
   build-test:
