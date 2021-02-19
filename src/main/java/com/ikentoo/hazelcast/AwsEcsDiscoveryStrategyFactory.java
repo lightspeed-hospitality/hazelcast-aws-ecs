@@ -22,7 +22,6 @@ import com.hazelcast.logging.ILogger;
 import com.hazelcast.spi.discovery.DiscoveryNode;
 import com.hazelcast.spi.discovery.DiscoveryStrategy;
 import com.hazelcast.spi.discovery.DiscoveryStrategyFactory;
-
 import java.util.Collection;
 import java.util.Map;
 
@@ -34,7 +33,8 @@ public class AwsEcsDiscoveryStrategyFactory implements DiscoveryStrategyFactory 
     }
 
     @Override
-    public DiscoveryStrategy newDiscoveryStrategy(DiscoveryNode discoveryNode, ILogger iLogger, Map<String, Comparable> map) {
+    public DiscoveryStrategy newDiscoveryStrategy(
+            DiscoveryNode discoveryNode, ILogger iLogger, Map<String, Comparable> map) {
         return new AwsEcsDiscoveryStrategy(iLogger, map);
     }
 
@@ -42,5 +42,4 @@ public class AwsEcsDiscoveryStrategyFactory implements DiscoveryStrategyFactory 
     public Collection<PropertyDefinition> getConfigurationProperties() {
         return AwsEcsProperties.PROPERTY_DEFINITIONS;
     }
-
 }
