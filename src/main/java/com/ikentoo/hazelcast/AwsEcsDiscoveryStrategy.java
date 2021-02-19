@@ -17,6 +17,10 @@
 
 package com.ikentoo.hazelcast;
 
+import static java.lang.String.format;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Comparator.comparing;
+
 import com.amazonaws.services.ecs.AmazonECS;
 import com.amazonaws.services.ecs.AmazonECSClientBuilder;
 import com.amazonaws.services.ecs.model.*;
@@ -26,7 +30,6 @@ import com.hazelcast.spi.discovery.AbstractDiscoveryStrategy;
 import com.hazelcast.spi.discovery.DiscoveryNode;
 import com.hazelcast.spi.discovery.SimpleDiscoveryNode;
 import com.hazelcast.util.StringUtil;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -43,17 +46,13 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static java.lang.String.format;
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Comparator.comparing;
-
-
 @SuppressWarnings("raw")
 public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
 
     private final AwsEcsProperties.Config config;
-    private final Set<Address> previousValues = new ConcurrentSkipListSet<>(
-            comparing(Address::getHost).thenComparing(Address::getPort));
+    private final Set<Address> previousValues =
+            new ConcurrentSkipListSet<>(
+                    comparing(Address::getHost).thenComparing(Address::getPort));
 
     private final String taskArn;
 
@@ -61,7 +60,6 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
         super(logger, properties);
         this.taskArn = getOwnTaskArn(logger);
         this.config = AwsEcsProperties.fromProps(properties);
-
     }
 
     public static String getOwnTaskArn(ILogger logger) {
@@ -72,11 +70,10 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             if (metaDataUri == null) {
                 return null;
             }
-            BufferedReader reader = new BufferedReader(new InputStreamReader(metaDataUri.toURL().openStream(), UTF_8));
-            String content = reader
-                    .lines()
-                    .onClose(close(reader))
-                    .collect(Collectors.joining(" "));
+            BufferedReader reader =
+                    new BufferedReader(
+                            new InputStreamReader(metaDataUri.toURL().openStream(), UTF_8));
+            String content = reader.lines().onClose(close(reader)).collect(Collectors.joining(" "));
 
             logger.fine(format("AWS_META=%s", content));
             Pattern pattern = Pattern.compile("^.*\"TaskARN\" *: *\"([^\"]+)\".*$", Pattern.DOTALL);
@@ -130,24 +127,34 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             config.getAwsRegion().ifPresent(clientBuilder::withRegion);
             AmazonECS client = clientBuilder.build();
 
-
             List<Task> tasks;
-            if (!StringUtil.isNullOrEmptyAfterTrim(config.getClusterName()) &&
-                    !StringUtil.isNullOrEmptyAfterTrim(config.getServiceName())) {
-                tasks = tasksForClusterAndService(client, config.getClusterName(), config.getServiceName());
+            if (!StringUtil.isNullOrEmptyAfterTrim(config.getClusterName())
+                    && !StringUtil.isNullOrEmptyAfterTrim(config.getServiceName())) {
+                tasks =
+                        tasksForClusterAndService(
+                                client, config.getClusterName(), config.getServiceName());
             } else {
-                tasks = tasksForClusterAndServicePattern(client, config.getClusterNameRegexp(), config.getServiceNameRegexp());
+                tasks =
+                        tasksForClusterAndServicePattern(
+                                client,
+                                config.getClusterNameRegexp(),
+                                config.getServiceNameRegexp());
             }
 
-            List<Address> addresses = tasks
-                    .stream()
-                    // remove own task
-                    .filter(task -> {
-                        getLogger().fine(format("local task [%s], discovered task [%s]", this.taskArn, task.getTaskArn()));
-                        return !task.getTaskArn().equals(taskArn);
-                    })
-                    .flatMap(this::fromTask)
-                    .collect(Collectors.toList());
+            List<Address> addresses =
+                    tasks.stream()
+                            // remove own task
+                            .filter(
+                                    task -> {
+                                        getLogger()
+                                                .fine(
+                                                        format(
+                                                                "local task [%s], discovered task [%s]",
+                                                                this.taskArn, task.getTaskArn()));
+                                        return !task.getTaskArn().equals(taskArn);
+                                    })
+                            .flatMap(this::fromTask)
+                            .collect(Collectors.toList());
 
             previousValues.clear();
             previousValues.addAll(addresses);
@@ -158,64 +165,59 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             }
             getLogger().severe("Couldn't discover addresses using previous values", e);
         }
-        return previousValues.stream()
-                .map(SimpleDiscoveryNode::new)
-                .collect(Collectors.toList());
+        return previousValues.stream().map(SimpleDiscoveryNode::new).collect(Collectors.toList());
     }
 
-
     private Stream<Address> fromTask(Task task) {
-        return task.getContainers()
-                .stream()
+        return task.getContainers().stream()
                 .filter(container -> container.getName().matches(config.getContainerNameFilter()))
                 .flatMap(this::fromContainer);
     }
 
     private Stream<Address> fromContainer(Container container) {
-        return container.getNetworkInterfaces()
-                .stream()
-                .flatMap(this::fromNetworkInterface);
+        return container.getNetworkInterfaces().stream().flatMap(this::fromNetworkInterface);
     }
 
     private Stream<Address> fromNetworkInterface(NetworkInterface networkInterface) {
         return config.getPorts()
-                .mapToObj(port -> {
-                    try {
-                        return new Address(networkInterface.getPrivateIpv4Address(), port);
-                    } catch (UnknownHostException e) {
-                        getLogger().severe(e.getMessage());
-                        return null;
-                    }
-                })
+                .mapToObj(
+                        port -> {
+                            try {
+                                return new Address(networkInterface.getPrivateIpv4Address(), port);
+                            } catch (UnknownHostException e) {
+                                getLogger().severe(e.getMessage());
+                                return null;
+                            }
+                        })
                 .filter(Objects::nonNull);
     }
 
     static <T> List<List<T>> toChunks(int size, List<T> list) {
-        return IntStream.range(0, list.size())
-                .boxed()
-                .map(idx -> new Pair<>(idx, list.get(idx)))
-                .collect(Collectors.groupingBy(p -> p.l / size))
-                .values()
-                .stream()
-                .map(chunked_pairs -> chunked_pairs.stream().map(p -> p.r).collect(Collectors.toList()))
+        return IntStream.range(0, list.size()).boxed().map(idx -> new Pair<>(idx, list.get(idx)))
+                .collect(Collectors.groupingBy(p -> p.l / size)).values().stream()
+                .map(
+                        chunked_pairs ->
+                                chunked_pairs.stream().map(p -> p.r).collect(Collectors.toList()))
                 .collect(Collectors.toList());
     }
 
-    private static List<Task> tasksForClusterAndTaskArns(AmazonECS client, String clusterName, List<String> taskArns) {
-        return toChunks(100, taskArns)
-                .stream()
+    private static List<Task> tasksForClusterAndTaskArns(
+            AmazonECS client, String clusterName, List<String> taskArns) {
+        return toChunks(100, taskArns).stream()
                 .filter(l -> !l.isEmpty())
-                .flatMap(chunkedarns -> {
-                    DescribeTasksRequest describeTaskRequest = new DescribeTasksRequest();
-                    describeTaskRequest.setTasks(chunkedarns);
-                    describeTaskRequest.setCluster(clusterName);
-                    DescribeTasksResult tasks = client.describeTasks(describeTaskRequest);
-                    return tasks.getTasks().stream();
-                })
+                .flatMap(
+                        chunkedarns -> {
+                            DescribeTasksRequest describeTaskRequest = new DescribeTasksRequest();
+                            describeTaskRequest.setTasks(chunkedarns);
+                            describeTaskRequest.setCluster(clusterName);
+                            DescribeTasksResult tasks = client.describeTasks(describeTaskRequest);
+                            return tasks.getTasks().stream();
+                        })
                 .collect(Collectors.toList());
     }
 
-    private static List<Task> tasksForClusterAndService(AmazonECS client, String clusterName, String serviceName) {
+    private static List<Task> tasksForClusterAndService(
+            AmazonECS client, String clusterName, String serviceName) {
         ListTasksRequest listTaskRequest = new ListTasksRequest();
         listTaskRequest.setCluster(clusterName);
         listTaskRequest.setServiceName(serviceName);
@@ -224,22 +226,27 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
         return tasksForClusterAndTaskArns(client, clusterName, taskIds.getTaskArns());
     }
 
-    private static List<Task> tasksForClusterAndServicePattern(AmazonECS client, Pattern clusterNamePattern, Pattern serviceNamePattern) {
-        return client
-                .listClusters()
-                .getClusterArns()
-                .stream()
+    private static List<Task> tasksForClusterAndServicePattern(
+            AmazonECS client, Pattern clusterNamePattern, Pattern serviceNamePattern) {
+        return client.listClusters().getClusterArns().stream()
                 .filter(clusterArn -> clusterNamePattern.matcher(clusterArn).matches())
-                .flatMap(clusterArn -> {
+                .flatMap(
+                        clusterArn -> {
                             ListServicesRequest listServicesRequest = new ListServicesRequest();
                             listServicesRequest.setCluster(clusterArn);
                             return client.listServices(listServicesRequest).getServiceArns()
                                     .stream()
-                                    .filter(serviceArn -> serviceNamePattern.matcher(serviceArn).matches())
+                                    .filter(
+                                            serviceArn ->
+                                                    serviceNamePattern
+                                                            .matcher(serviceArn)
+                                                            .matches())
                                     .map(serviceArn -> new Pair<>(clusterArn, serviceArn));
-                        }
-                )
-                .flatMap(serviceIds -> tasksForClusterAndService(client, serviceIds.l, serviceIds.r).stream())
+                        })
+                .flatMap(
+                        serviceIds ->
+                                tasksForClusterAndService(client, serviceIds.l, serviceIds.r)
+                                        .stream())
                 .collect(Collectors.toList());
     }
 
@@ -252,5 +259,4 @@ public class AwsEcsDiscoveryStrategy extends AbstractDiscoveryStrategy {
             this.r = r;
         }
     }
-
 }

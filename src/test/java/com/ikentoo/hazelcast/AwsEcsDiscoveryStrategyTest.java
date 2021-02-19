@@ -17,33 +17,32 @@
 
 package com.ikentoo.hazelcast;
 
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
 
 import com.hazelcast.logging.Slf4jFactory;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.contrib.java.lang.system.EnvironmentVariables;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.contrib.java.lang.system.EnvironmentVariables;
 
 public class AwsEcsDiscoveryStrategyTest {
-    @Rule
-    public final EnvironmentVariables environmentVariables
-            = new EnvironmentVariables();
+    @Rule public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
 
     @Test
     public void getOwnTaskArnFromFile() throws IOException {
         Path tempFile = makeTaskFile();
-        environmentVariables.set("ECS_CONTAINER_METADATA_FILE", tempFile.toAbsolutePath().toString());
+        environmentVariables.set(
+                "ECS_CONTAINER_METADATA_FILE", tempFile.toAbsolutePath().toString());
         String arn = AwsEcsDiscoveryStrategy.getOwnTaskArn(new Slf4jFactory().getLogger(""));
-        assertEquals("arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4", arn);
+        assertEquals(
+                "arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4",
+                arn);
     }
 
     @Test
@@ -52,20 +51,23 @@ public class AwsEcsDiscoveryStrategyTest {
         Path parent = tempFile.getParent();
         Files.copy(tempFile, parent.resolve("task"), REPLACE_EXISTING);
 
-        environmentVariables.set("ECS_CONTAINER_METADATA_URI", parent.toAbsolutePath().toUri().toString());
+        environmentVariables.set(
+                "ECS_CONTAINER_METADATA_URI", parent.toAbsolutePath().toUri().toString());
         String arn = AwsEcsDiscoveryStrategy.getOwnTaskArn(new Slf4jFactory().getLogger(""));
-        assertEquals("arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4", arn);
+        assertEquals(
+                "arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4",
+                arn);
     }
-
 
     private Path makeTaskFile() throws IOException {
 
-        String example = "{\n" +
-                "    \"Cluster\": \"default\",\n" +
-                "    \"ContainerInstanceARN\": \"arn:aws:ecs:us-west-2:012345678910:container-instance/1f73d099-b914-411c-a9ff-81633b7741dd\",\n" +
-                "    \"TaskARN\": \"arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4\",\n" +
-                "    \"ContainerName\": \"metadata\"\n" +
-                "}";
+        String example =
+                "{\n"
+                        + "    \"Cluster\": \"default\",\n"
+                        + "    \"ContainerInstanceARN\": \"arn:aws:ecs:us-west-2:012345678910:container-instance/1f73d099-b914-411c-a9ff-81633b7741dd\",\n"
+                        + "    \"TaskARN\": \"arn:aws:ecs:us-west-2:012345678910:task/d90675f8-1a98-444b-805b-3d9cabb6fcd4\",\n"
+                        + "    \"ContainerName\": \"metadata\"\n"
+                        + "}";
 
         Path tempFile = Files.createTempFile("meta", "json");
         Files.write(tempFile, example.getBytes(StandardCharsets.UTF_8));

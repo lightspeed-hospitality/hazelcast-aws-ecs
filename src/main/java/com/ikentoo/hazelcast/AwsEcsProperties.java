@@ -17,25 +17,22 @@
 
 package com.ikentoo.hazelcast;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.hazelcast.config.properties.*;
-import com.hazelcast.util.StringUtil;
-
-import java.util.*;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import static com.hazelcast.config.properties.PropertyTypeConverter.BOOLEAN;
 import static com.hazelcast.config.properties.PropertyTypeConverter.STRING;
 import static java.lang.String.format;
 import static java.util.Optional.ofNullable;
 
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.hazelcast.config.properties.*;
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 @SuppressWarnings("raw")
 public enum AwsEcsProperties {
-
     cluster(true, STRING, null),
     cluster_name_regexp(true, STRING, null),
     service(true, STRING, null),
@@ -60,8 +57,10 @@ public enum AwsEcsProperties {
         return this.name().replaceAll("_", "-");
     }
 
-    AwsEcsProperties(boolean optional, PropertyTypeConverter typeConverter, ValueValidator validator) {
-        this.propertyDefinition = new SimplePropertyDefinition(this.key(), optional, typeConverter, validator);
+    AwsEcsProperties(
+            boolean optional, PropertyTypeConverter typeConverter, ValueValidator validator) {
+        this.propertyDefinition =
+                new SimplePropertyDefinition(this.key(), optional, typeConverter, validator);
     }
 
     public static Config fromProps(Map<String, Comparable> props) {
@@ -99,7 +98,6 @@ public enum AwsEcsProperties {
         }
     }
 
-
     public static class Config {
         private final Map<String, Comparable> properties;
         private final Pattern clusterNamePattern;
@@ -128,9 +126,8 @@ public enum AwsEcsProperties {
         }
 
         private Pattern initPattern(AwsEcsProperties prop, String exactFallBack) {
-            String fallback = "^" + ofNullable(exactFallBack)
-                    .map(Pattern::quote)
-                    .orElse(".*") + "$";
+            String fallback =
+                    "^" + ofNullable(exactFallBack).map(Pattern::quote).orElse(".*") + "$";
 
             return Pattern.compile((String) properties.getOrDefault(prop.key(), fallback));
         }
@@ -148,7 +145,9 @@ public enum AwsEcsProperties {
             String awsKey = (String) properties.get(access_key.key());
             String secretKey = (String) properties.get(secret_key.key());
             if (awsKey != null && secretKey != null) {
-                provider = new AWSStaticCredentialsProvider(new BasicAWSCredentials(awsKey, secretKey));
+                provider =
+                        new AWSStaticCredentialsProvider(
+                                new BasicAWSCredentials(awsKey, secretKey));
             }
             return ofNullable(provider);
         }
