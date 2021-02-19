@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  mvn: lsk/mvn@1.0
+  mvn: lsk/mvn@1.2
 
 jobs:
   build-test:
