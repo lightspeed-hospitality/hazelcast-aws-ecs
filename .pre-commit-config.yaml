@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/lightspeed-hospitality/pre-commit-hooks
-    rev: 'v0.5.0'
+    rev: 'v0.5.1'
     hooks:
       - id: google-java-code-format
         args: ["--formatter-version=1.7"]
